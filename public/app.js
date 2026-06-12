@@ -9,6 +9,7 @@ if (tg) {
 const supportedLanguages = ['ru', 'en', 'uk'];
 const deepScansStorageKey = 'snarkscan_deep_scans';
 const devModeStorageKey = 'snarkscan_dev_mode';
+const sessionStorageKey = 'snarkscan_session_id';
 
 function hasDevModeInUrl() {
   return new URLSearchParams(window.location.search).get('dev') === '1';
@@ -21,10 +22,21 @@ function initializeDevMode() {
 }
 
 function isDevModeEnabled() {
-  return hasDevModeInUrl() || localStorage.getItem(devModeStorageKey) === '1';
+  return hasDevModeInUrl();
 }
 
 initializeDevMode();
+
+function getSessionId() {
+  let sessionId = localStorage.getItem(sessionStorageKey);
+  if (!sessionId) {
+    sessionId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem(sessionStorageKey, sessionId);
+  }
+  return sessionId;
+}
+
+const sessionId = getSessionId();
 
 const starPackages = [
   { id: 'basic', title: 'Basic', stars: 25, scans: 5 },
@@ -81,11 +93,17 @@ const i18n = {
     starUnit: 'Stars',
     buyPackageAria: 'Купить пакет',
     deepScansBalance: 'Глубокие сканы: {count}',
+    deepScansBalanceDev: 'Глубокие сканы: {count} (dev/test)',
+    deepScansBalanceServer: 'Глубокие сканы: {count} (server)',
     grantTestScans: 'Выдать тестовые сканы',
     testScansGranted: 'Начислено +5 глубоких сканов.',
     premiumResultReady: 'Глубокий скан готов. Списан 1 скан.',
+    notEnoughScans: 'Недостаточно глубоких сканов. Купите пакет, чтобы продолжить.',
+    scanSpent: 'Списан 1 глубокий скан.',
+    scanReturned: 'Скан возвращён на баланс из-за ошибки.',
+    balanceUpdated: 'Баланс обновлён.',
     invoiceOpening: 'Открываем оплату…',
-    paymentSuccess: 'Оплата прошла. Баланс будет начислен после подключения webhook.',
+    paymentSuccess: 'Оплата получена. Баланс начислен.',
     invoiceFailed: 'Не удалось открыть оплату.'
   },
   en: {
@@ -136,11 +154,17 @@ const i18n = {
     starUnit: 'Stars',
     buyPackageAria: 'Buy package',
     deepScansBalance: 'Deep scans: {count}',
+    deepScansBalanceDev: 'Deep scans: {count} (dev/test)',
+    deepScansBalanceServer: 'Deep scans: {count} (server)',
     grantTestScans: 'Grant test scans',
     testScansGranted: '+5 deep scans granted.',
     premiumResultReady: 'Deep scan is ready. 1 scan spent.',
+    notEnoughScans: 'Not enough deep scans. Buy a package to continue.',
+    scanSpent: '1 deep scan spent.',
+    scanReturned: 'The scan was returned to your balance because of an error.',
+    balanceUpdated: 'Balance updated.',
     invoiceOpening: 'Opening payment…',
-    paymentSuccess: 'Payment successful. Balance will be credited after webhook setup.',
+    paymentSuccess: 'Payment received. Balance credited.',
     invoiceFailed: 'Could not open payment.'
   },
   uk: {
@@ -191,11 +215,17 @@ const i18n = {
     starUnit: 'зірок',
     buyPackageAria: 'Купити пакет',
     deepScansBalance: 'Глибокі скани: {count}',
+    deepScansBalanceDev: 'Глибокі скани: {count} (dev/test)',
+    deepScansBalanceServer: 'Глибокі скани: {count} (server)',
     grantTestScans: 'Видати тестові скани',
     testScansGranted: 'Нараховано +5 глибоких сканів.',
     premiumResultReady: 'Глибокий скан готовий. Списано 1 скан.',
+    notEnoughScans: 'Недостатньо глибоких сканів. Купіть пакет, щоб продовжити.',
+    scanSpent: 'Списано 1 глибокий скан.',
+    scanReturned: 'Скан повернено на баланс через помилку.',
+    balanceUpdated: 'Баланс оновлено.',
     invoiceOpening: 'Відкриваємо оплату…',
-    paymentSuccess: 'Оплата пройшла. Баланс буде нараховано після підключення webhook.',
+    paymentSuccess: 'Оплату отримано. Баланс нараховано.',
     invoiceFailed: 'Не вдалося відкрити оплату.'
   }
 };
@@ -205,21 +235,25 @@ const state = {
   language: getInitialLanguage(),
   imageDataUrl: '',
   lastResult: null,
-  deepScans: getStoredDeepScans(),
-  isDevMode: isDevModeEnabled()
+  deepScans: isDevModeEnabled() ? getStoredDeepScans() : 0,
+  isDevMode: isDevModeEnabled(),
+  balanceSource: isDevModeEnabled() ? 'dev' : 'server'
 };
 
 Object.assign(i18n.ru, {
   deepScanning: 'Глубокий скан работает...',
-  deepScanFailed: 'Не удалось завершить глубокий скан. Скан возвращён на баланс.'
+  deepScanFailed: 'Не удалось завершить глубокий скан. Скан возвращён на баланс.',
+  balanceLoadFailed: 'Не удалось обновить баланс.'
 });
 Object.assign(i18n.en, {
   deepScanning: 'Deep scan is running...',
-  deepScanFailed: 'Could not complete the deep scan. The scan was returned to your balance.'
+  deepScanFailed: 'Could not complete the deep scan. The scan was returned to your balance.',
+  balanceLoadFailed: 'Could not update balance.'
 });
 Object.assign(i18n.uk, {
   deepScanning: 'Глибокий скан працює...',
-  deepScanFailed: 'Не вдалося завершити глибокий скан. Скан повернено на баланс.'
+  deepScanFailed: 'Не вдалося завершити глибокий скан. Скан повернено на баланс.',
+  balanceLoadFailed: 'Не вдалося оновити баланс.'
 });
 
 const modeButtons = document.querySelectorAll('.mode');
@@ -310,10 +344,7 @@ scanButton.addEventListener('click', async () => {
   try {
     const response = await fetch('/api/scan', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-init-data': tg?.initData || ''
-      },
+      headers: apiHeaders(),
       body: JSON.stringify({
         mode: state.mode,
         language: state.language,
@@ -360,6 +391,8 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !purchaseModal.hidden) closePurchaseModal();
 });
 
+refreshServerBalance();
+
 function getInitialLanguage() {
   const saved = localStorage.getItem('snarkscan-language');
   if (supportedLanguages.includes(saved)) return saved;
@@ -375,6 +408,14 @@ function t(key) {
 
 function formatMessage(key, values = {}) {
   return t(key).replace(/\{(\w+)\}/g, (_, name) => values[name] ?? '');
+}
+
+function apiHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'x-telegram-init-data': tg?.initData || '',
+    'x-snarkscan-session-id': sessionId
+  };
 }
 
 function capitalize(value) {
@@ -482,13 +523,16 @@ function getStoredDeepScans() {
 
 function setDeepScans(count) {
   state.deepScans = Math.max(0, count);
-  localStorage.setItem(deepScansStorageKey, String(state.deepScans));
+  if (state.isDevMode) {
+    localStorage.setItem(deepScansStorageKey, String(state.deepScans));
+  }
   updateDeepScansBalance();
 }
 
 function updateDeepScansBalance() {
   if (!deepScansBalance) return;
-  deepScansBalance.textContent = formatMessage('deepScansBalance', { count: state.deepScans });
+  const key = state.isDevMode ? 'deepScansBalanceDev' : 'deepScansBalanceServer';
+  deepScansBalance.textContent = formatMessage(key, { count: state.deepScans });
 }
 
 function updateDevControls() {
@@ -503,24 +547,56 @@ function grantTestScans() {
   tg?.HapticFeedback?.notificationOccurred?.('success');
 }
 
-async function handleDeepScanClick() {
-  if (state.deepScans <= 0) {
-    openPurchaseModal();
+async function refreshServerBalance({ showStatus = false } = {}) {
+  if (state.isDevMode) {
+    state.balanceSource = 'dev';
+    state.deepScans = getStoredDeepScans();
+    updateDeepScansBalance();
     return;
   }
 
+  try {
+    const response = await fetch('/api/balance', {
+      headers: apiHeaders()
+    });
+    const data = await response.json();
+    if (!response.ok || data.source !== 'server') throw new Error('Balance unavailable');
+    state.balanceSource = 'server';
+    setDeepScans(Number(data.deepScans) || 0);
+    if (showStatus) setPurchaseStatus(t('balanceUpdated'), 'success');
+  } catch {
+    state.balanceSource = 'server';
+    setDeepScans(0);
+    if (showStatus) setPurchaseStatus(t('balanceLoadFailed'), 'error');
+  }
+}
+
+async function handleDeepScanClick() {
+  if (state.deepScans <= 0) {
+    openPurchaseModal();
+    setPurchaseStatus(t('notEnoughScans'), 'error');
+    return;
+  }
+
+  if (state.isDevMode) {
+    await runDevDeepScan();
+    return;
+  }
+
+  await runServerDeepScan();
+}
+
+async function runDevDeepScan() {
   const balanceBeforeScan = state.deepScans;
   deepButton.disabled = true;
   deepButton.textContent = t('deepScanning');
   setDeepScans(balanceBeforeScan - 1);
+  setPurchaseStatus(t('scanSpent'), 'success');
 
   try {
     const response = await fetch('/api/scan', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-init-data': tg?.initData || ''
-      },
+      headers: apiHeaders(),
       body: JSON.stringify({
         mode: state.mode,
         language: state.language,
@@ -534,10 +610,55 @@ async function handleDeepScanClick() {
     if (!data.ok) throw new Error(data.error || t('deepScanFailed'));
     renderResult(data.result);
     state.lastResult = data.result;
+    setPurchaseStatus(t('premiumResultReady'), 'success');
     tg?.HapticFeedback?.notificationOccurred?.('success');
   } catch (error) {
     setDeepScans(balanceBeforeScan);
-    alert(error.message || t('deepScanFailed'));
+    setPurchaseStatus(t('scanReturned'), 'error');
+    alert(t('deepScanFailed'));
+    tg?.HapticFeedback?.notificationOccurred?.('error');
+  } finally {
+    deepButton.disabled = false;
+    deepButton.textContent = t('deepButton');
+  }
+}
+
+async function runServerDeepScan() {
+  deepButton.disabled = true;
+  deepButton.textContent = t('deepScanning');
+  setPurchaseStatus(t('scanSpent'), 'success');
+
+  try {
+    const response = await fetch('/api/deep-scan/use', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({
+        mode: state.mode,
+        language: state.language,
+        text: scanText.value.trim(),
+        imageDataUrl: state.imageDataUrl,
+        name: tg?.initDataUnsafe?.user?.first_name || '',
+        userId: tg?.initDataUnsafe?.user?.id || null,
+        sessionId
+      })
+    });
+    const data = await response.json();
+    setDeepScans(Number(data.deepScans) || 0);
+    if (response.status === 402) {
+      openPurchaseModal();
+      setPurchaseStatus(t('notEnoughScans'), 'error');
+      return;
+    }
+    if (!data.ok) throw new Error('Deep scan failed');
+
+    renderResult(data.result);
+    state.lastResult = data.result;
+    setPurchaseStatus(t('premiumResultReady'), 'success');
+    tg?.HapticFeedback?.notificationOccurred?.('success');
+  } catch {
+    setPurchaseStatus(t('scanReturned'), 'error');
+    await refreshServerBalance();
+    alert(t('deepScanFailed'));
     tg?.HapticFeedback?.notificationOccurred?.('error');
   } finally {
     deepButton.disabled = false;
@@ -568,21 +689,20 @@ async function buyStarsPackage(packageId) {
 
     const response = await fetch('/api/stars/create-invoice', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-telegram-init-data': tg?.initData || ''
-      },
+      headers: apiHeaders(),
       body: JSON.stringify({
         packageId,
         userId: tg?.initDataUnsafe?.user?.id || null,
+        sessionId,
         language: state.language
       })
     });
     const data = await response.json();
     if (!data.ok || !data.invoiceLink) throw new Error(data.error || data.details || t('invoiceFailed'));
 
-    tg.openInvoice(data.invoiceLink, (status) => {
+    tg.openInvoice(data.invoiceLink, async (status) => {
       if (status === 'paid') {
+        await refreshServerBalance();
         setPurchaseStatus(t('paymentSuccess'), 'success');
         tg?.HapticFeedback?.notificationOccurred?.('success');
       } else if (status === 'failed') {
