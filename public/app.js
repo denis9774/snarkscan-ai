@@ -7,6 +7,12 @@ if (tg) {
 }
 
 const supportedLanguages = ['ru', 'en', 'uk'];
+const deepScansStorageKey = 'snarkscan_deep_scans';
+const devModeStorageKey = 'snarkscan_dev_mode';
+
+if (new URLSearchParams(window.location.search).get('dev') === '1') {
+  localStorage.setItem(devModeStorageKey, '1');
+}
 
 const starPackages = [
   { id: 'basic', title: 'Basic', stars: 25, scans: 5 },
@@ -61,6 +67,10 @@ const i18n = {
     packageScans: 'глубоких сканов',
     starUnit: 'Stars',
     buyPackageAria: 'Купить пакет',
+    deepScansBalance: 'Глубокие сканы: {count}',
+    grantTestScans: 'Выдать тестовые сканы',
+    testScansGranted: 'Начислено +5 глубоких сканов.',
+    premiumResultReady: 'Глубокий скан готов. Списан 1 скан.',
     invoiceOpening: 'Открываем оплату…',
     paymentSuccess: 'Оплата прошла. Баланс будет начислен после подключения webhook.',
     invoiceFailed: 'Не удалось открыть оплату.'
@@ -111,6 +121,10 @@ const i18n = {
     packageScans: 'deep scans',
     starUnit: 'Stars',
     buyPackageAria: 'Buy package',
+    deepScansBalance: 'Deep scans: {count}',
+    grantTestScans: 'Grant test scans',
+    testScansGranted: '+5 deep scans granted.',
+    premiumResultReady: 'Deep scan is ready. 1 scan spent.',
     invoiceOpening: 'Opening payment…',
     paymentSuccess: 'Payment successful. Balance will be credited after webhook setup.',
     invoiceFailed: 'Could not open payment.'
@@ -161,6 +175,10 @@ const i18n = {
     packageScans: 'глибоких сканів',
     starUnit: 'зірок',
     buyPackageAria: 'Купити пакет',
+    deepScansBalance: 'Глибокі скани: {count}',
+    grantTestScans: 'Видати тестові скани',
+    testScansGranted: 'Нараховано +5 глибоких сканів.',
+    premiumResultReady: 'Глибокий скан готовий. Списано 1 скан.',
     invoiceOpening: 'Відкриваємо оплату…',
     paymentSuccess: 'Оплата пройшла. Баланс буде нараховано після підключення webhook.',
     invoiceFailed: 'Не вдалося відкрити оплату.'
@@ -171,8 +189,23 @@ const state = {
   mode: 'photo',
   language: getInitialLanguage(),
   imageDataUrl: '',
-  lastResult: null
+  lastResult: null,
+  deepScans: getStoredDeepScans(),
+  isDevMode: localStorage.getItem(devModeStorageKey) === '1'
 };
+
+Object.assign(i18n.ru, {
+  deepScanning: 'Глубокий скан работает...',
+  deepScanFailed: 'Не удалось завершить глубокий скан. Скан возвращён на баланс.'
+});
+Object.assign(i18n.en, {
+  deepScanning: 'Deep scan is running...',
+  deepScanFailed: 'Could not complete the deep scan. The scan was returned to your balance.'
+});
+Object.assign(i18n.uk, {
+  deepScanning: 'Глибокий скан працює...',
+  deepScanFailed: 'Не вдалося завершити глибокий скан. Скан повернено на баланс.'
+});
 
 const modeButtons = document.querySelectorAll('.mode');
 const languageButtons = document.querySelectorAll('.language-button');
@@ -192,6 +225,7 @@ const bars = document.querySelector('#bars');
 const roast = document.querySelector('#roast');
 const advice = document.querySelector('#advice');
 const disclaimer = document.querySelector('#disclaimer');
+const detailedAnalysis = document.querySelector('#detailedAnalysis');
 const shareButton = document.querySelector('#shareButton');
 const deepButton = document.querySelector('#deepButton');
 const premiumInfoButton = document.querySelector('#premiumInfoButton');
@@ -201,6 +235,8 @@ const purchaseModal = document.querySelector('#purchaseModal');
 const closePurchaseModalButton = document.querySelector('#closePurchaseModal');
 const packageList = document.querySelector('#packageList');
 const purchaseStatus = document.querySelector('#purchaseStatus');
+const deepScansBalance = document.querySelector('#deepScansBalance');
+const grantTestScansButton = document.querySelector('#grantTestScansButton');
 
 applyLanguage(state.language);
 
@@ -297,10 +333,11 @@ shareButton.addEventListener('click', async () => {
   else window.open(url, '_blank');
 });
 
-deepButton.addEventListener('click', openPurchaseModal);
+deepButton.addEventListener('click', handleDeepScanClick);
 premiumInfoButton.addEventListener('click', openPurchaseModal);
 starsButton.addEventListener('click', openPurchaseModal);
 closePurchaseModalButton.addEventListener('click', closePurchaseModal);
+grantTestScansButton.addEventListener('click', grantTestScans);
 purchaseModal.addEventListener('click', (event) => {
   if (event.target === purchaseModal) closePurchaseModal();
 });
@@ -319,6 +356,10 @@ function getInitialLanguage() {
 
 function t(key) {
   return i18n[state.language]?.[key] || i18n.ru[key] || key;
+}
+
+function formatMessage(key, values = {}) {
+  return t(key).replace(/\{(\w+)\}/g, (_, name) => values[name] ?? '');
 }
 
 function capitalize(value) {
@@ -361,6 +402,8 @@ function applyLanguage(language) {
   scanButton.querySelector('strong').textContent = t('scanButton');
   if (resultMode) resultMode.textContent = modeLabel(state.mode);
   if (state.imageDataUrl) fileLabel.textContent = t('uploadedTitle');
+  updateDeepScansBalance();
+  updateDevControls();
   renderStarPackages();
 }
 
@@ -383,6 +426,7 @@ async function loadImageFile(file) {
 
 function openPurchaseModal() {
   renderStarPackages();
+  updateDevControls();
   setPurchaseStatus('');
   purchaseModal.hidden = false;
   document.body.classList.add('modal-open');
@@ -414,6 +458,75 @@ function renderStarPackages() {
     button.addEventListener('click', () => buyStarsPackage(pack.id));
     packageList.appendChild(button);
   });
+}
+
+function getStoredDeepScans() {
+  const value = Number.parseInt(localStorage.getItem(deepScansStorageKey) || '0', 10);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function setDeepScans(count) {
+  state.deepScans = Math.max(0, count);
+  localStorage.setItem(deepScansStorageKey, String(state.deepScans));
+  updateDeepScansBalance();
+}
+
+function updateDeepScansBalance() {
+  if (!deepScansBalance) return;
+  deepScansBalance.textContent = formatMessage('deepScansBalance', { count: state.deepScans });
+}
+
+function updateDevControls() {
+  if (!grantTestScansButton) return;
+  grantTestScansButton.hidden = !state.isDevMode;
+}
+
+function grantTestScans() {
+  setDeepScans(state.deepScans + 5);
+  setPurchaseStatus(t('testScansGranted'), 'success');
+  tg?.HapticFeedback?.notificationOccurred?.('success');
+}
+
+async function handleDeepScanClick() {
+  if (state.deepScans <= 0) {
+    openPurchaseModal();
+    return;
+  }
+
+  const balanceBeforeScan = state.deepScans;
+  deepButton.disabled = true;
+  deepButton.textContent = t('deepScanning');
+  setDeepScans(balanceBeforeScan - 1);
+
+  try {
+    const response = await fetch('/api/scan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-telegram-init-data': tg?.initData || ''
+      },
+      body: JSON.stringify({
+        mode: state.mode,
+        language: state.language,
+        text: scanText.value.trim(),
+        imageDataUrl: state.imageDataUrl,
+        name: tg?.initDataUnsafe?.user?.first_name || '',
+        deep: true
+      })
+    });
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error || t('deepScanFailed'));
+    renderResult(data.result);
+    state.lastResult = data.result;
+    tg?.HapticFeedback?.notificationOccurred?.('success');
+  } catch (error) {
+    setDeepScans(balanceBeforeScan);
+    alert(error.message || t('deepScanFailed'));
+    tg?.HapticFeedback?.notificationOccurred?.('error');
+  } finally {
+    deepButton.disabled = false;
+    deepButton.textContent = t('deepButton');
+  }
 }
 
 function setPurchaseStatus(message, type = '') {
@@ -473,16 +586,21 @@ async function buyStarsPackage(packageId) {
 
 function renderResult(result) {
   resultCard.hidden = false;
-  resultMode.textContent = modeLabel(state.mode);
+  resultCard.classList.toggle('deep-result', Boolean(result.deep));
+  resultMode.textContent = result.deep ? (result.label || 'DEEP SCAN') : modeLabel(state.mode);
   resultTitle.textContent = result.title;
   vibeName.textContent = result.vibeName;
   score.textContent = `${result.score}/100`;
   roast.textContent = result.roast;
   advice.textContent = result.advice;
   disclaimer.textContent = result.disclaimer;
+  if (detailedAnalysis) {
+    detailedAnalysis.hidden = !result.detailedAnalysis;
+    detailedAnalysis.textContent = result.detailedAnalysis || '';
+  }
   bars.innerHTML = '';
 
-  (result.percentages || []).slice(0, 5).forEach((item) => {
+  (result.percentages || []).slice(0, result.deep ? 7 : 5).forEach((item) => {
     const node = barTemplate.content.cloneNode(true);
     node.querySelector('.bar-label').textContent = item.label;
     node.querySelector('.bar-value').textContent = `${item.value}%`;
