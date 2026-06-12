@@ -308,11 +308,77 @@ function generatePercentages(labels, seed) {
   }));
 }
 
-export function createMockScan({ mode = 'photo', language = 'ru', text = '', name = 'ты' }) {
+const deepContent = {
+  ru: {
+    title: 'Глубокий скан завершён',
+    label: 'DEEP SCAN',
+    vibeName: 'премиум вайб с драматическим послевкусием',
+    parameters: ['Харизма', 'Социальная магия', 'Скрытая драма', 'Самоирония', 'Флирт-радар', 'Red-flag иммунитет', 'Мемный потенциал'],
+    analysis: 'Обычный скан видит поверхность, а глубокий уже копает в сценарий. Здесь заметен вайб человека, который умеет выглядеть уверенно, даже когда внутри открыт Excel с хаосом. Сильная сторона - быстро собирать внимание и превращать неловкость в стиль. Риск - иногда играть в загадочность так долго, что люди начинают искать инструкцию.',
+    roast: 'Ты выглядишь как премиум-подписка на интригу: красиво, дорого, но половина функций спрятана в настройках.',
+    advice: 'Оставь загадочность, но добавь ясности в ключевых местах. Тогда вайб будет не просто цеплять, а ещё и работать на тебя.',
+    share: (score) => `Мой DEEP SCAN в SnarkScan AI: ${score}/100. Вайб официально разобран глубже, чем мои жизненные планы.`
+  },
+  en: {
+    title: 'Deep scan complete',
+    label: 'DEEP SCAN',
+    vibeName: 'premium chaos with main-character polish',
+    parameters: ['Charisma', 'Social signal', 'Hidden drama', 'Self-irony', 'Flirt radar', 'Red-flag immunity', 'Meme potential'],
+    analysis: 'A regular scan catches the surface; this deep scan reads the pattern. The vibe says you can make uncertainty look intentional and turn small awkward moments into style. The strongest signal is social gravity: people notice the energy before they understand it. The weak spot is over-mystery, where the plot gets so subtle that the audience needs subtitles.',
+    roast: 'You give premium mystery subscription: great branding, strong presence, and a few important features hidden behind settings.',
+    advice: 'Keep the intrigue, but add one clear signal when it matters. That turns the vibe from entertaining into dangerously effective.',
+    share: (score) => `My SnarkScan AI DEEP SCAN: ${score}/100. The vibe got audited harder than my life choices.`
+  },
+  uk: {
+    title: 'Глибокий скан завершено',
+    label: 'DEEP SCAN',
+    vibeName: 'преміум вайб із контрольованим хаосом',
+    parameters: ['Харизма', 'Соціальна магія', 'Прихована драма', 'Самоіронія', 'Флірт-радар', 'Імунітет до red flags', 'Мемний потенціал'],
+    analysis: 'Звичайний скан бачить поверхню, а глибокий уже читає сценарій між рядками. Тут вайб людини, яка може виглядати впевнено навіть тоді, коли всередині відкрито десять вкладок із хаосом. Сильний бік - збирати увагу і робити з незручності стиль. Ризик - інколи так довго грати в загадковість, що іншим хочеться попросити інструкцію.',
+    roast: 'Твій вайб як преміум-підписка на інтригу: виглядає дорого, але частина функцій захована десь у налаштуваннях.',
+    advice: 'Залишай інтригу, але додавай ясність у важливі моменти. Так вайб буде не просто чіпляти, а працювати на тебе.',
+    share: (score) => `Мій DEEP SCAN у SnarkScan AI: ${score}/100. Вайб розібрано глибше, ніж мої плани на тиждень.`
+  }
+};
+
+function generateDeepPercentages(labels, seed) {
+  return labels.slice(0, 7).map((label, index) => ({
+    label,
+    value: 61 + ((seed >>> (index + 1)) % 36)
+  }));
+}
+
+function createDeepMockScan({ mode, language, seed }) {
+  const pack = deepContent[language] || deepContent.ru;
+  const score = 82 + (seed % 15);
+
+  return {
+    mode,
+    deep: true,
+    label: pack.label,
+    title: pack.title,
+    vibeName: pack.vibeName,
+    score,
+    percentages: generateDeepPercentages(pack.parameters, seed),
+    detailedAnalysis: pack.analysis,
+    roast: pack.roast,
+    advice: pack.advice,
+    shareText: pack.share(score),
+    disclaimer: content[language]?.disclaimer || content.ru.disclaimer,
+    upsell: ''
+  };
+}
+
+export function createMockScan({ mode = 'photo', language = 'ru', text = '', name = 'ты', deep = false }) {
   const safeMode = ['photo', 'roast', 'chat', 'compare'].includes(mode) ? mode : 'photo';
   const safeLanguage = ['ru', 'en', 'uk'].includes(language) ? language : 'ru';
   const pack = content[safeLanguage];
   const seed = seededNumber(`${safeMode}:${safeLanguage}:${text}:${name}:${new Date().toISOString().slice(0, 10)}`);
+
+  if (deep) {
+    return createDeepMockScan({ mode: safeMode, language: safeLanguage, seed });
+  }
+
   const labelSet = pick(pack.buckets[safeMode], seed);
   const percentages = generatePercentages(labelSet, seed);
   const vibe = pick(labelSet, seed, 2);

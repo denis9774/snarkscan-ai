@@ -126,7 +126,12 @@ body.modal-open { overflow: hidden; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
   cursor: pointer;
 }
-.stars-pill strong { font-size: 16px; }
+.stars-pill strong {
+  max-width: 190px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.15;
+}
 .stars-pill .plus { color: var(--muted); font-weight: 800; font-size: 18px; }
 
 .hero {
@@ -414,6 +419,31 @@ textarea::placeholder { color: rgba(251,248,255,0.34); }
 .bar-head { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; font-weight: 800; }
 .bar-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.09); overflow: hidden; }
 .bar-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #8a3ffc, #ff4ecd); box-shadow: 0 0 18px rgba(196,54,255,0.36); transition: width 0.72s cubic-bezier(.2,.9,.2,1); }
+.detailed-analysis {
+  margin: 18px 0 0;
+  padding: 15px;
+  border: 1px solid rgba(249,199,79,0.22);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(249,199,79,0.13), transparent 10rem),
+    rgba(255,255,255,0.055);
+  color: rgba(251, 248, 255, 0.86);
+  line-height: 1.5;
+}
+.result-card.deep-result {
+  border-color: rgba(249, 199, 79, 0.36);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(249,199,79,0.13), transparent 13rem),
+    linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.035)),
+    var(--panel);
+}
+.result-card.deep-result .tag {
+  background: rgba(249,199,79,0.16);
+  color: #ffe1a0;
+}
+.result-card.deep-result .bar-fill {
+  background: linear-gradient(90deg, #f9c74f, #ff4ecd);
+}
 .roast {
   margin: 18px 0 0;
   padding: 14px;
@@ -595,6 +625,20 @@ textarea::placeholder { color: rgba(251,248,255,0.34); }
   cursor: wait;
   opacity: 0.68;
 }
+.dev-grant-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  border: 1px dashed rgba(183, 247, 207, 0.42);
+  border-radius: 16px;
+  color: #b7f7cf;
+  background: rgba(64, 214, 123, 0.09);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.dev-grant-button:active { transform: scale(0.99); }
+.dev-grant-button[hidden] { display: none; }
 .package-name {
   display: flex;
   align-items: center;

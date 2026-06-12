@@ -4,19 +4,26 @@ const LANGUAGE_NAMES = {
   uk: 'Ukrainian'
 };
 
-function buildSystemPrompt(language = 'ru') {
+function buildSystemPrompt(language = 'ru', deep = false) {
   const languageName = LANGUAGE_NAMES[language] || LANGUAGE_NAMES.ru;
+  const depthRules = deep
+    ? 'This is a paid DEEP SCAN. Make it richer than a regular scan: use exactly the requested deep scan title for the language, label "DEEP SCAN", 5-7 vibe parameters, detailedAnalysis, roast, advice and shareText.'
+    : 'This is a regular scan. Keep it compact.';
   return `
 You are SnarkScan AI, an entertainment-only Telegram Mini App.
 Create playful, meme-like vibe scans in ${languageName}. Be witty, social, viral, and safe.
 Never claim objective beauty, mental health, identity, age, ethnicity, income, sexuality, medical state or criminal traits.
 Avoid harassment, cruelty, sexualization, hate, or vulnerable-attribute guessing.
+${depthRules}
 Return ONLY valid JSON with this shape:
 {
+  "deep": boolean,
+  "label": string,
   "title": string,
   "vibeName": string,
   "score": number,
   "percentages": [{"label": string, "value": number}],
+  "detailedAnalysis": string,
   "roast": string,
   "advice": string,
   "shareText": string,
@@ -26,7 +33,7 @@ Return ONLY valid JSON with this shape:
 `;
 }
 
-function buildUserPrompt({ mode, text, language }) {
+function buildUserPrompt({ mode, text, language, deep }) {
   const modeMap = {
     photo: 'Analyze the uploaded image as a funny entertainment vibe scan. Do not identify or infer sensitive traits.',
     roast: 'Create a playful roast based on the user input. Keep it teasing, not cruel.',
@@ -34,14 +41,20 @@ function buildUserPrompt({ mode, text, language }) {
     compare: 'Compare two vibes as a funny entertainment result. Do not rank beauty or objective worth.'
   };
 
-  return `${modeMap[mode] || modeMap.photo}\nOutput language: ${LANGUAGE_NAMES[language] || LANGUAGE_NAMES.ru}.\nUser text/context: ${text || 'No text provided.'}`;
+  const deepTitle = {
+    ru: 'Title must be: "Глубокий скан завершён".',
+    en: 'Title must be: "Deep scan complete".',
+    uk: 'Title must be: "Глибокий скан завершено".'
+  };
+
+  return `${modeMap[mode] || modeMap.photo}\nOutput language: ${LANGUAGE_NAMES[language] || LANGUAGE_NAMES.ru}.\n${deep ? deepTitle[language] : ''}\nUser text/context: ${text || 'No text provided.'}`;
 }
 
-export async function createOpenAIScan({ apiKey, model, mode, text, imageDataUrl, language = 'ru' }) {
+export async function createOpenAIScan({ apiKey, model, mode, text, imageDataUrl, language = 'ru', deep = false }) {
   if (!apiKey) throw new Error('OPENAI_API_KEY is missing');
   const safeLanguage = ['ru', 'en', 'uk'].includes(language) ? language : 'ru';
 
-  const userContent = [{ type: 'input_text', text: buildUserPrompt({ mode, text, language: safeLanguage }) }];
+  const userContent = [{ type: 'input_text', text: buildUserPrompt({ mode, text, language: safeLanguage, deep }) }];
   if (imageDataUrl && (mode === 'photo' || mode === 'compare')) {
     userContent.push({ type: 'input_image', image_url: imageDataUrl });
   }
@@ -55,7 +68,7 @@ export async function createOpenAIScan({ apiKey, model, mode, text, imageDataUrl
     body: JSON.stringify({
       model: model || 'gpt-4.1-mini',
       input: [
-        { role: 'system', content: [{ type: 'input_text', text: buildSystemPrompt(safeLanguage) }] },
+        { role: 'system', content: [{ type: 'input_text', text: buildSystemPrompt(safeLanguage, deep) }] },
         { role: 'user', content: userContent }
       ],
       temperature: 0.9

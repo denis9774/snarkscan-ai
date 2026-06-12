@@ -35,7 +35,7 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/scan', requireTelegramAuth, async (req, res) => {
   try {
-    const { mode = 'photo', language = 'ru', text = '', imageDataUrl = '', name = '' } = req.body || {};
+    const { mode = 'photo', language = 'ru', text = '', imageDataUrl = '', name = '', deep = false } = req.body || {};
     const safeMode = ['photo', 'roast', 'chat', 'compare'].includes(mode) ? mode : 'photo';
     const safeLanguage = ['ru', 'en', 'uk'].includes(language) ? language : 'ru';
 
@@ -55,16 +55,17 @@ app.post('/api/scan', requireTelegramAuth, async (req, res) => {
         mode: safeMode,
         text,
         imageDataUrl,
-        language: safeLanguage
+        language: safeLanguage,
+        deep: Boolean(deep)
       });
     } else {
-      result = createMockScan({ mode: safeMode, language: safeLanguage, text, name });
+      result = createMockScan({ mode: safeMode, language: safeLanguage, text, name, deep: Boolean(deep) });
     }
 
     res.json({ ok: true, result });
   } catch (error) {
     console.error(error);
-    const fallback = createMockScan({ mode: req.body?.mode || 'photo', language: req.body?.language || 'ru', text: req.body?.text || '' });
+    const fallback = createMockScan({ mode: req.body?.mode || 'photo', language: req.body?.language || 'ru', text: req.body?.text || '', deep: Boolean(req.body?.deep) });
     res.status(200).json({ ok: true, result: fallback, warning: error.message || 'AI failed, returned mock result' });
   }
 });

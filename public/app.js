@@ -10,9 +10,21 @@ const supportedLanguages = ['ru', 'en', 'uk'];
 const deepScansStorageKey = 'snarkscan_deep_scans';
 const devModeStorageKey = 'snarkscan_dev_mode';
 
-if (new URLSearchParams(window.location.search).get('dev') === '1') {
-  localStorage.setItem(devModeStorageKey, '1');
+function hasDevModeInUrl() {
+  return new URLSearchParams(window.location.search).get('dev') === '1';
 }
+
+function initializeDevMode() {
+  if (hasDevModeInUrl()) {
+    localStorage.setItem(devModeStorageKey, '1');
+  }
+}
+
+function isDevModeEnabled() {
+  return hasDevModeInUrl() || localStorage.getItem(devModeStorageKey) === '1';
+}
+
+initializeDevMode();
 
 const starPackages = [
   { id: 'basic', title: 'Basic', stars: 25, scans: 5 },
@@ -61,6 +73,7 @@ const i18n = {
     imageTooLarge: 'Картинка слишком большая. Лучше до 4.5 MB.',
     scanFailed: 'Что-то пошло не так',
     paymentsNotReady: 'Payments are not connected yet.',
+    starsOnlyTelegram: 'Оплата Stars доступна только внутри Telegram Mini App.',
     purchaseKicker: 'Telegram Stars',
     purchaseTitle: 'Купить сканы',
     closeModalAria: 'Закрыть',
@@ -115,6 +128,7 @@ const i18n = {
     imageTooLarge: 'The image is too large. Keep it under 4.5 MB.',
     scanFailed: 'Something went wrong',
     paymentsNotReady: 'Payments are not connected yet.',
+    starsOnlyTelegram: 'Stars payment is available only inside Telegram Mini App.',
     purchaseKicker: 'Telegram Stars',
     purchaseTitle: 'Buy scans',
     closeModalAria: 'Close',
@@ -169,6 +183,7 @@ const i18n = {
     imageTooLarge: 'Картинка завелика. Краще до 4.5 МБ.',
     scanFailed: 'Щось пішло не так',
     paymentsNotReady: 'Payments are not connected yet.',
+    starsOnlyTelegram: 'Оплата Stars доступна лише всередині Telegram Mini App.',
     purchaseKicker: 'Telegram Stars',
     purchaseTitle: 'Купити скани',
     closeModalAria: 'Закрити',
@@ -191,7 +206,7 @@ const state = {
   imageDataUrl: '',
   lastResult: null,
   deepScans: getStoredDeepScans(),
-  isDevMode: localStorage.getItem(devModeStorageKey) === '1'
+  isDevMode: isDevModeEnabled()
 };
 
 Object.assign(i18n.ru, {
@@ -478,6 +493,7 @@ function updateDeepScansBalance() {
 
 function updateDevControls() {
   if (!grantTestScansButton) return;
+  state.isDevMode = isDevModeEnabled();
   grantTestScansButton.hidden = !state.isDevMode;
 }
 
@@ -545,6 +561,11 @@ async function buyStarsPackage(packageId) {
   setPackagesDisabled(true);
   setPurchaseStatus(t('invoiceOpening'));
   try {
+    if (!tg || typeof tg.openInvoice !== 'function') {
+      setPurchaseStatus(t('starsOnlyTelegram'), 'error');
+      return;
+    }
+
     const response = await fetch('/api/stars/create-invoice', {
       method: 'POST',
       headers: {
@@ -560,24 +581,21 @@ async function buyStarsPackage(packageId) {
     const data = await response.json();
     if (!data.ok || !data.invoiceLink) throw new Error(data.error || data.details || t('invoiceFailed'));
 
-    if (tg?.openInvoice) {
-      tg.openInvoice(data.invoiceLink, (status) => {
-        if (status === 'paid') {
-          setPurchaseStatus(t('paymentSuccess'), 'success');
-          tg?.HapticFeedback?.notificationOccurred?.('success');
-        } else if (status === 'failed') {
-          setPurchaseStatus(t('invoiceFailed'), 'error');
-          tg?.HapticFeedback?.notificationOccurred?.('error');
-        } else {
-          setPurchaseStatus('');
-        }
-      });
-    } else {
-      window.open(data.invoiceLink, '_blank');
-      setPurchaseStatus('');
-    }
+    tg.openInvoice(data.invoiceLink, (status) => {
+      if (status === 'paid') {
+        setPurchaseStatus(t('paymentSuccess'), 'success');
+        tg?.HapticFeedback?.notificationOccurred?.('success');
+      } else if (status === 'failed') {
+        setPurchaseStatus(t('invoiceFailed'), 'error');
+        tg?.HapticFeedback?.notificationOccurred?.('error');
+      } else {
+        setPurchaseStatus('');
+      }
+    });
   } catch (error) {
-    setPurchaseStatus(error.message || t('paymentsNotReady'), 'error');
+    const message = String(error?.message || error || '');
+    const isUnsupportedInvoice = message.includes('WebAppMethodUnsupported');
+    setPurchaseStatus(isUnsupportedInvoice ? t('starsOnlyTelegram') : error.message || t('paymentsNotReady'), 'error');
     tg?.HapticFeedback?.notificationOccurred?.('error');
   } finally {
     setPackagesDisabled(false);

@@ -26,7 +26,7 @@
             <button class="language-button" data-lang="uk" type="button">UA</button>
           </div>
           <button id="starsButton" class="stars-pill" type="button" aria-label="Баланс Stars" data-i18n-aria-label="starsAria">
-            <span>⭐</span><strong>120</strong><span class="plus">+</span>
+            <span>⭐</span><strong id="deepScansBalance">Глубокие сканы: 0</strong><span class="plus">+</span>
           </button>
         </div>
       </header>
@@ -91,6 +91,7 @@
         <h2 id="resultTitle"></h2>
         <div id="vibeName" class="vibe-name"></div>
         <div id="bars" class="bars"></div>
+        <p id="detailedAnalysis" class="detailed-analysis" hidden></p>
         <p id="roast" class="roast"></p>
         <p id="advice" class="advice"></p>
         <p id="disclaimer" class="disclaimer"></p>
@@ -129,6 +130,7 @@
           <button id="closePurchaseModal" class="modal-close" type="button" aria-label="Закрыть" data-i18n-aria-label="closeModalAria">×</button>
         </div>
         <div id="packageList" class="package-list"></div>
+        <button id="grantTestScansButton" class="dev-grant-button" type="button" data-i18n="grantTestScans" hidden>Выдать тестовые сканы</button>
         <p id="purchaseStatus" class="purchase-status" role="status"></p>
       </section>
     </div>
