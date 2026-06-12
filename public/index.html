@@ -119,6 +119,20 @@
       </footer>
     </main>
 
+    <div id="purchaseModal" class="modal-backdrop" hidden>
+      <section class="purchase-modal glass-card" role="dialog" aria-modal="true" aria-labelledby="purchaseTitle">
+        <div class="modal-head">
+          <div>
+            <p class="modal-kicker" data-i18n="purchaseKicker">Stars</p>
+            <h2 id="purchaseTitle" data-i18n="purchaseTitle">Купить сканы</h2>
+          </div>
+          <button id="closePurchaseModal" class="modal-close" type="button" aria-label="Закрыть" data-i18n-aria-label="closeModalAria">×</button>
+        </div>
+        <div id="packageList" class="package-list"></div>
+        <p id="purchaseStatus" class="purchase-status" role="status"></p>
+      </section>
+    </div>
+
     <template id="barTemplate">
       <div class="bar-row">
         <div class="bar-head"><span class="bar-label"></span><span class="bar-value"></span></div>

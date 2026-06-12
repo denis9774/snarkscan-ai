@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createMockScan } from './src/snarkEngine.js';
 import { createOpenAIScan } from './src/openaiClient.js';
 import { verifyTelegramWebAppData } from './src/telegramAuth.js';
-import { createDeepScanInvoice } from './src/telegramPayments.js';
+import { createDeepScanInvoice, createStarsInvoice, getStarPackage } from './src/telegramPayments.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,6 +84,46 @@ app.post('/api/create-invoice', requireTelegramAuth, async (req, res) => {
     res.status(501).json({
       ok: false,
       error: 'Stars invoice is not configured yet',
+      details: error.message
+    });
+  }
+});
+
+app.post('/api/stars/create-invoice', requireTelegramAuth, async (req, res) => {
+  try {
+    const { packageId } = req.body || {};
+    const pack = getStarPackage(packageId);
+    if (!pack) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Unknown Stars package.'
+      });
+    }
+
+    const userId = req.telegramUser?.id || req.body?.userId || null;
+    const invoiceLink = await createStarsInvoice({
+      botToken: process.env.TELEGRAM_BOT_TOKEN,
+      publicAppUrl: process.env.PUBLIC_APP_URL,
+      userId,
+      packageId: pack.id
+    });
+
+    res.json({
+      ok: true,
+      invoiceLink,
+      package: {
+        id: pack.id,
+        title: pack.title,
+        stars: pack.stars,
+        scans: pack.scans
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    const status = error.code === 'PAYMENTS_NOT_CONNECTED' ? 501 : 500;
+    res.status(status).json({
+      ok: false,
+      error: error.code === 'PAYMENTS_NOT_CONNECTED' ? 'Payments are not connected yet.' : 'Telegram invoice creation failed.',
       details: error.message
     });
   }

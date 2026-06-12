@@ -49,6 +49,7 @@ body::before {
 
 button, textarea, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
+body.modal-open { overflow: hidden; }
 
 .page-glow {
   position: fixed;
@@ -505,6 +506,140 @@ textarea::placeholder { color: rgba(251,248,255,0.34); }
 .safety-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.42; }
 .safety-card strong { color: var(--text); }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: end center;
+  padding: 18px 14px max(18px, env(safe-area-inset-bottom));
+  background: rgba(5, 4, 10, 0.72);
+  backdrop-filter: blur(16px);
+}
+.modal-backdrop[hidden] { display: none; }
+.purchase-modal {
+  width: min(620px, 100%);
+  padding: 18px;
+  border-radius: 28px;
+  animation: modalIn 0.2s ease both;
+}
+@keyframes modalIn {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.modal-kicker {
+  margin: 0 0 5px;
+  color: #ffe1a0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.purchase-modal h2 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.modal-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(255,255,255,0.07);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.package-list {
+  display: grid;
+  gap: 10px;
+}
+.package-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 82px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 14px;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(249,199,79,0.14), transparent 8rem),
+    rgba(255,255,255,0.06);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+.package-option:hover {
+  border-color: rgba(249,199,79,0.48);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(249,199,79,0.2), transparent 8rem),
+    rgba(255,255,255,0.08);
+}
+.package-option:active { transform: scale(0.99); }
+.package-option[disabled] {
+  cursor: wait;
+  opacity: 0.68;
+}
+.package-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 18px;
+  font-weight: 950;
+}
+.package-name span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 11px;
+  background: rgba(249,199,79,0.14);
+  color: #ffe1a0;
+  font-size: 15px;
+}
+.package-scans {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+.package-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 9px 11px;
+  background: rgba(249,199,79,0.14);
+  color: #ffe1a0;
+  font-size: 14px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+.purchase-status {
+  min-height: 20px;
+  margin: 12px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.purchase-status.error { color: #ffb4b4; }
+.purchase-status.success { color: #b7f7cf; }
+
 @media (max-width: 520px) {
   .app-shell { padding-left: 12px; padding-right: 12px; }
   .brand { font-size: 19px; }
@@ -607,6 +742,13 @@ textarea::placeholder { color: rgba(251,248,255,0.34); }
   .result-card h2 { font-size: 24px; line-height: 1.12; }
   .bar-head { align-items: flex-start; }
   .bar-label { overflow-wrap: anywhere; }
+  .modal-backdrop { padding: 12px 10px max(12px, env(safe-area-inset-bottom)); }
+  .purchase-modal { padding: 15px; border-radius: 24px; }
+  .purchase-modal h2 { font-size: 23px; }
+  .package-option { min-height: 76px; padding: 12px; }
+  .package-name { font-size: 17px; }
+  .package-scans { font-size: 13px; }
+  .package-price { padding: 8px 10px; font-size: 13px; }
 }
 
 @media (max-width: 390px) {

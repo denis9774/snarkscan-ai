@@ -8,6 +8,12 @@ if (tg) {
 
 const supportedLanguages = ['ru', 'en', 'uk'];
 
+const starPackages = [
+  { id: 'basic', title: 'Basic', stars: 25, scans: 5 },
+  { id: 'plus', title: 'Plus', stars: 50, scans: 12 },
+  { id: 'pro', title: 'Pro', stars: 100, scans: 30 }
+];
+
 const i18n = {
   ru: {
     htmlLang: 'ru',
@@ -48,8 +54,16 @@ const i18n = {
     needImage: 'Нужна картинка.',
     imageTooLarge: 'Картинка слишком большая. Лучше до 4.5 MB.',
     scanFailed: 'Что-то пошло не так',
-    starsDemo: 'В MVP это демо-баланс. Реальные Stars подключаются через BotFather и платежный invoice.',
-    paymentsNotReady: 'Платежи Stars пока не настроены. MVP уже работает в бесплатном режиме. '
+    paymentsNotReady: 'Payments are not connected yet.',
+    purchaseKicker: 'Telegram Stars',
+    purchaseTitle: 'Купить сканы',
+    closeModalAria: 'Закрыть',
+    packageScans: 'глубоких сканов',
+    starUnit: 'Stars',
+    buyPackageAria: 'Купить пакет',
+    invoiceOpening: 'Открываем оплату…',
+    paymentSuccess: 'Оплата прошла. Баланс будет начислен после подключения webhook.',
+    invoiceFailed: 'Не удалось открыть оплату.'
   },
   en: {
     htmlLang: 'en',
@@ -90,8 +104,16 @@ const i18n = {
     needImage: 'Please upload an image.',
     imageTooLarge: 'The image is too large. Keep it under 4.5 MB.',
     scanFailed: 'Something went wrong',
-    starsDemo: 'In the MVP this is a demo balance. Real Stars are connected through BotFather and a payment invoice.',
-    paymentsNotReady: 'Stars payments are not configured yet. The MVP already works in free mode. '
+    paymentsNotReady: 'Payments are not connected yet.',
+    purchaseKicker: 'Telegram Stars',
+    purchaseTitle: 'Buy scans',
+    closeModalAria: 'Close',
+    packageScans: 'deep scans',
+    starUnit: 'Stars',
+    buyPackageAria: 'Buy package',
+    invoiceOpening: 'Opening payment…',
+    paymentSuccess: 'Payment successful. Balance will be credited after webhook setup.',
+    invoiceFailed: 'Could not open payment.'
   },
   uk: {
     htmlLang: 'uk',
@@ -132,8 +154,16 @@ const i18n = {
     needImage: 'Потрібна картинка.',
     imageTooLarge: 'Картинка завелика. Краще до 4.5 МБ.',
     scanFailed: 'Щось пішло не так',
-    starsDemo: 'У демоверсії це тестовий баланс. Реальні зірки підключаються через BotFather і платіжний рахунок.',
-    paymentsNotReady: 'Платежі зірками поки не налаштовані. Демоверсія вже працює у безкоштовному режимі. '
+    paymentsNotReady: 'Payments are not connected yet.',
+    purchaseKicker: 'Telegram Stars',
+    purchaseTitle: 'Купити скани',
+    closeModalAria: 'Закрити',
+    packageScans: 'глибоких сканів',
+    starUnit: 'зірок',
+    buyPackageAria: 'Купити пакет',
+    invoiceOpening: 'Відкриваємо оплату…',
+    paymentSuccess: 'Оплата пройшла. Баланс буде нараховано після підключення webhook.',
+    invoiceFailed: 'Не вдалося відкрити оплату.'
   }
 };
 
@@ -167,6 +197,10 @@ const deepButton = document.querySelector('#deepButton');
 const premiumInfoButton = document.querySelector('#premiumInfoButton');
 const starsButton = document.querySelector('#starsButton');
 const barTemplate = document.querySelector('#barTemplate');
+const purchaseModal = document.querySelector('#purchaseModal');
+const closePurchaseModalButton = document.querySelector('#closePurchaseModal');
+const packageList = document.querySelector('#packageList');
+const purchaseStatus = document.querySelector('#purchaseStatus');
 
 applyLanguage(state.language);
 
@@ -263,9 +297,16 @@ shareButton.addEventListener('click', async () => {
   else window.open(url, '_blank');
 });
 
-deepButton.addEventListener('click', openDeepScanInvoice);
-premiumInfoButton.addEventListener('click', openDeepScanInvoice);
-starsButton.addEventListener('click', () => alert(t('starsDemo')));
+deepButton.addEventListener('click', openPurchaseModal);
+premiumInfoButton.addEventListener('click', openPurchaseModal);
+starsButton.addEventListener('click', openPurchaseModal);
+closePurchaseModalButton.addEventListener('click', closePurchaseModal);
+purchaseModal.addEventListener('click', (event) => {
+  if (event.target === purchaseModal) closePurchaseModal();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !purchaseModal.hidden) closePurchaseModal();
+});
 
 function getInitialLanguage() {
   const saved = localStorage.getItem('snarkscan-language');
@@ -320,6 +361,7 @@ function applyLanguage(language) {
   scanButton.querySelector('strong').textContent = t('scanButton');
   if (resultMode) resultMode.textContent = modeLabel(state.mode);
   if (state.imageDataUrl) fileLabel.textContent = t('uploadedTitle');
+  renderStarPackages();
 }
 
 async function loadImageFile(file) {
@@ -339,22 +381,93 @@ async function loadImageFile(file) {
   tg?.HapticFeedback?.notificationOccurred?.('success');
 }
 
-async function openDeepScanInvoice() {
+function openPurchaseModal() {
+  renderStarPackages();
+  setPurchaseStatus('');
+  purchaseModal.hidden = false;
+  document.body.classList.add('modal-open');
+  closePurchaseModalButton.focus();
+  tg?.HapticFeedback?.selectionChanged?.();
+}
+
+function closePurchaseModal() {
+  purchaseModal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+function renderStarPackages() {
+  if (!packageList) return;
+  packageList.innerHTML = '';
+  starPackages.forEach((pack) => {
+    const button = document.createElement('button');
+    button.className = 'package-option';
+    button.type = 'button';
+    button.dataset.packageId = pack.id;
+    button.setAttribute('aria-label', `${t('buyPackageAria')} ${pack.title}`);
+    button.innerHTML = `
+      <span>
+        <span class="package-name"><span>★</span>${pack.title}</span>
+        <span class="package-scans">${pack.scans} ${t('packageScans')}</span>
+      </span>
+      <span class="package-price">${pack.stars} ${t('starUnit')}</span>
+    `;
+    button.addEventListener('click', () => buyStarsPackage(pack.id));
+    packageList.appendChild(button);
+  });
+}
+
+function setPurchaseStatus(message, type = '') {
+  purchaseStatus.textContent = message;
+  purchaseStatus.classList.toggle('error', type === 'error');
+  purchaseStatus.classList.toggle('success', type === 'success');
+}
+
+function setPackagesDisabled(disabled) {
+  packageList.querySelectorAll('.package-option').forEach((button) => {
+    button.disabled = disabled;
+  });
+}
+
+async function buyStarsPackage(packageId) {
+  setPackagesDisabled(true);
+  setPurchaseStatus(t('invoiceOpening'));
   try {
-    const response = await fetch('/api/create-invoice', {
+    const response = await fetch('/api/stars/create-invoice', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-telegram-init-data': tg?.initData || ''
       },
-      body: JSON.stringify({ userId: tg?.initDataUnsafe?.user?.id || null, language: state.language })
+      body: JSON.stringify({
+        packageId,
+        userId: tg?.initDataUnsafe?.user?.id || null,
+        language: state.language
+      })
     });
     const data = await response.json();
-    if (!data.ok) throw new Error(data.details || data.error);
-    if (tg?.openInvoice) tg.openInvoice(data.invoiceLink);
-    else window.open(data.invoiceLink, '_blank');
+    if (!data.ok || !data.invoiceLink) throw new Error(data.error || data.details || t('invoiceFailed'));
+
+    if (tg?.openInvoice) {
+      tg.openInvoice(data.invoiceLink, (status) => {
+        if (status === 'paid') {
+          setPurchaseStatus(t('paymentSuccess'), 'success');
+          tg?.HapticFeedback?.notificationOccurred?.('success');
+        } else if (status === 'failed') {
+          setPurchaseStatus(t('invoiceFailed'), 'error');
+          tg?.HapticFeedback?.notificationOccurred?.('error');
+        } else {
+          setPurchaseStatus('');
+        }
+      });
+    } else {
+      window.open(data.invoiceLink, '_blank');
+      setPurchaseStatus('');
+    }
   } catch (error) {
-    alert(t('paymentsNotReady') + (error.message || ''));
+    setPurchaseStatus(error.message || t('paymentsNotReady'), 'error');
+    tg?.HapticFeedback?.notificationOccurred?.('error');
+  } finally {
+    setPackagesDisabled(false);
   }
 }
 
