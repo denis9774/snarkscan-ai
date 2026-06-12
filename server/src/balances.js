@@ -1,3 +1,5 @@
+import { createClient } from '@supabase/supabase-js';
+
 export const userBalances = new Map();
 
 export const BALANCE_PACKAGES = {
@@ -10,38 +12,22 @@ const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseServiceRoleKey);
+export const supabase = hasSupabaseConfig
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    })
+  : null;
 
-async function supabaseRequest(path, { method = 'GET', headers = {}, body } = {}) {
-  if (!hasSupabaseConfig) {
+function requireSupabaseClient() {
+  if (!supabase) {
     const error = new Error('Supabase is not configured');
     error.code = 'SUPABASE_NOT_CONFIGURED';
     throw error;
   }
-
-  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
-    method,
-    headers: {
-      apikey: supabaseServiceRoleKey,
-      Authorization: `Bearer ${supabaseServiceRoleKey}`,
-      'Content-Type': 'application/json',
-      ...headers
-    },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
-
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    const error = new Error(data?.message || data?.hint || `Supabase request failed: ${response.status}`);
-    error.status = response.status;
-    error.data = data;
-    throw error;
-  }
-  return data;
-}
-
-function encodeFilter(value) {
-  return encodeURIComponent(String(value));
+  return supabase;
 }
 
 export function getIdentity(req) {
@@ -94,59 +80,72 @@ export function refundDeepScan(identity) {
 }
 
 export async function getSupabaseBalance(identity) {
-  const rows = await supabaseRequest(`user_balances?user_key=eq.${encodeFilter(identity.key)}&select=deep_scans&limit=1`);
-  if (rows?.[0]) return Number(rows[0].deep_scans) || 0;
+  const client = requireSupabaseClient();
+  const { data: existing, error: selectError } = await client
+    .from('user_balances')
+    .select('deep_scans')
+    .eq('user_key', identity.key)
+    .maybeSingle();
 
-  const inserted = await supabaseRequest('user_balances?select=deep_scans', {
-    method: 'POST',
-    headers: { Prefer: 'return=representation' },
-    body: {
+  if (selectError) throw selectError;
+  if (existing) return Number(existing.deep_scans) || 0;
+
+  const { data: inserted, error: insertError } = await client
+    .from('user_balances')
+    .insert({
       user_key: identity.key,
       telegram_user_id: identity.type === 'telegram' ? identity.id : null,
       deep_scans: 0
-    }
-  });
+    })
+    .select('deep_scans')
+    .single();
 
-  return Number(inserted?.[0]?.deep_scans) || 0;
+  if (insertError) throw insertError;
+  return Number(inserted?.deep_scans) || 0;
 }
 
 export async function addSupabaseBalance(identity, count) {
+  const client = requireSupabaseClient();
   const currentBalance = await getSupabaseBalance(identity);
   const nextBalance = Math.max(0, currentBalance + Number(count || 0));
-  const updated = await supabaseRequest(`user_balances?user_key=eq.${encodeFilter(identity.key)}&select=deep_scans`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=representation' },
-    body: {
+  const { data: updated, error } = await client
+    .from('user_balances')
+    .update({
       deep_scans: nextBalance,
       telegram_user_id: identity.type === 'telegram' ? identity.id : null,
       updated_at: new Date().toISOString()
-    }
-  });
-  return Number(updated?.[0]?.deep_scans) || nextBalance;
+    })
+    .eq('user_key', identity.key)
+    .select('deep_scans')
+    .single();
+
+  if (error) throw error;
+  return Number(updated?.deep_scans) || nextBalance;
 }
 
 export async function spendSupabaseDeepScan(identity) {
+  const client = requireSupabaseClient();
   const currentBalance = await getSupabaseBalance(identity);
   if (currentBalance <= 0) return { ok: false, deepScans: currentBalance };
 
-  const updated = await supabaseRequest(
-    `user_balances?user_key=eq.${encodeFilter(identity.key)}&deep_scans=eq.${currentBalance}&select=deep_scans`,
-    {
-      method: 'PATCH',
-      headers: { Prefer: 'return=representation' },
-      body: {
-        deep_scans: currentBalance - 1,
-        telegram_user_id: identity.type === 'telegram' ? identity.id : null,
-        updated_at: new Date().toISOString()
-      }
-    }
-  );
+  const { data: updated, error } = await client
+    .from('user_balances')
+    .update({
+      deep_scans: currentBalance - 1,
+      telegram_user_id: identity.type === 'telegram' ? identity.id : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_key', identity.key)
+    .eq('deep_scans', currentBalance)
+    .select('deep_scans')
+    .maybeSingle();
 
-  if (!updated?.[0]) {
+  if (error) throw error;
+  if (!updated) {
     return spendSupabaseDeepScan(identity);
   }
 
-  return { ok: true, deepScans: Number(updated[0].deep_scans) || 0 };
+  return { ok: true, deepScans: Number(updated.deep_scans) || 0 };
 }
 
 export async function refundSupabaseDeepScan(identity) {
@@ -154,10 +153,15 @@ export async function refundSupabaseDeepScan(identity) {
 }
 
 export async function hasSupabasePayment(telegramPaymentChargeId) {
-  const rows = await supabaseRequest(
-    `payments?telegram_payment_charge_id=eq.${encodeFilter(telegramPaymentChargeId)}&select=id&limit=1`
-  );
-  return Boolean(rows?.[0]);
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from('payments')
+    .select('id')
+    .eq('telegram_payment_charge_id', telegramPaymentChargeId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function insertSupabasePayment({
@@ -169,10 +173,10 @@ export async function insertSupabasePayment({
   deepScansAdded,
   payload
 }) {
-  const inserted = await supabaseRequest('payments?select=id', {
-    method: 'POST',
-    headers: { Prefer: 'return=representation' },
-    body: {
+  const client = requireSupabaseClient();
+  const { data: inserted, error } = await client
+    .from('payments')
+    .insert({
       telegram_payment_charge_id: telegramPaymentChargeId,
       provider_payment_charge_id: providerPaymentChargeId || null,
       user_key: identity.key,
@@ -181,13 +185,20 @@ export async function insertSupabasePayment({
       stars_amount: starsAmount,
       deep_scans_added: deepScansAdded,
       payload
-    }
-  });
-  return inserted?.[0] || null;
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return inserted || null;
 }
 
 export async function deleteSupabasePayment(telegramPaymentChargeId) {
-  await supabaseRequest(`payments?telegram_payment_charge_id=eq.${encodeFilter(telegramPaymentChargeId)}`, {
-    method: 'DELETE'
-  });
+  const client = requireSupabaseClient();
+  const { error } = await client
+    .from('payments')
+    .delete()
+    .eq('telegram_payment_charge_id', telegramPaymentChargeId);
+
+  if (error) throw error;
 }
