@@ -1,0 +1,19 @@
+{
+  "name": "snarkscan-ai-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SnarkScan AI Telegram Mini App MVP: playful AI vibe scans, chat analysis and share cards.",
+  "scripts": {
+    "dev": "node --watch server/index.js",
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.18.3"
+  }
+}

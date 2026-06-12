@@ -1,0 +1,11 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0B0D12"/>
+  <circle cx="250" cy="120" r="220" fill="#8547FF" fill-opacity="0.42"/>
+  <circle cx="980" cy="70" r="260" fill="#FF5397" fill-opacity="0.28"/>
+  <circle cx="640" cy="610" r="260" fill="#39D3FF" fill-opacity="0.18"/>
+  <rect x="72" y="72" width="1056" height="486" rx="56" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.16"/>
+  <text x="110" y="160" fill="white" fill-opacity="0.76" font-size="34" font-family="Arial, sans-serif">Telegram Mini App</text>
+  <text x="110" y="312" fill="white" font-size="112" font-weight="800" letter-spacing="-8" font-family="Arial, sans-serif">SnarkScan AI</text>
+  <text x="116" y="390" fill="white" fill-opacity="0.78" font-size="42" font-family="Arial, sans-serif">AI скажет то, что друзья постеснялись.</text>
+  <text x="116" y="462" fill="white" fill-opacity="0.55" font-size="30" font-family="Arial, sans-serif">Фото‑скан • Roast me • Разбор переписки • Share card</text>
+</svg>

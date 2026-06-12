@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#090812" />
+    <meta name="color-scheme" content="dark" />
+    <title>SnarkScan AI</title>
+    <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-glow page-glow-a"></div>
+    <div class="page-glow page-glow-b"></div>
+
+    <main class="app-shell" aria-label="SnarkScan AI Mini App">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="SnarkScan AI">
+          <span class="brand-mark">✦</span>
+          <span>Snark<span>Scan</span> AI</span>
+        </a>
+        <div class="top-actions">
+          <div class="language-switch" role="group" aria-label="Выбор языка" data-i18n-aria-label="languageAria">
+            <button class="language-button active" data-lang="ru" type="button">RU</button>
+            <button class="language-button" data-lang="en" type="button">EN</button>
+            <button class="language-button" data-lang="uk" type="button">UA</button>
+          </div>
+          <button id="starsButton" class="stars-pill" type="button" aria-label="Баланс Stars" data-i18n-aria-label="starsAria">
+            <span>⭐</span><strong>120</strong><span class="plus">+</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <p class="eyebrow" data-i18n="eyebrow">Telegram Mini App · entertainment AI</p>
+        <h1 data-i18n-html="heroTitle">Сканируй свой <span>вайб</span></h1>
+        <p class="hero-copy" data-i18n="heroCopy">AI проанализирует фото, переписку или короткий контекст и выдаст смешной разбор, которым хочется поделиться.</p>
+      </section>
+
+      <section class="mode-panel" aria-label="Режимы сканирования" data-i18n-aria-label="modesAria">
+        <button class="mode active" data-mode="photo" type="button">
+          <span class="mode-icon">📸</span>
+          <span data-i18n="modePhotoShort">Фото‑скан</span>
+        </button>
+        <button class="mode" data-mode="roast" type="button">
+          <span class="mode-icon hot">🔥</span>
+          <span data-i18n="modeRoastShort">Roast me</span>
+        </button>
+        <button class="mode" data-mode="chat" type="button">
+          <span class="mode-icon">💬</span>
+          <span data-i18n="modeChatShort">Разбор</span>
+        </button>
+        <button class="mode" data-mode="compare" type="button">
+          <span class="mode-icon">⚖️</span>
+          <span data-i18n="modeCompareShort">Сравнить</span>
+        </button>
+      </section>
+
+      <section class="scan-card glass-card">
+        <label id="dropZone" class="upload-zone" for="photoInput">
+          <input id="photoInput" type="file" accept="image/*" />
+          <span class="upload-orb" aria-hidden="true">
+            <span>🖼️</span>
+            <i>+</i>
+          </span>
+          <span id="fileLabel" class="upload-title" data-i18n="uploadTitle">Загрузите фото или сделайте снимок</span>
+          <span class="upload-subtitle" data-i18n="uploadSubtitle">Нажмите для выбора файла · до 4.5 MB</span>
+          <img id="preview" alt="Загруженное фото" hidden />
+        </label>
+
+        <div class="divider"><span data-i18n="or">или</span></div>
+
+        <label class="text-zone" for="scanText">
+          <span class="text-icon" aria-hidden="true">💬</span>
+          <textarea id="scanText" maxlength="5000" data-i18n-placeholder="placeholderPhoto" placeholder="Например: «Разбери эту переписку: он ответил через 2 дня — ахах норм…»"></textarea>
+          <span class="counter"><span id="charCount">0</span> / 5000</span>
+        </label>
+
+        <button id="scanButton" class="primary" type="button">
+          <span>✦</span>
+          <strong data-i18n="scanButton">Сканировать вайб</strong>
+          <span class="arrow">→</span>
+        </button>
+      </section>
+
+      <section id="resultCard" class="result-card glass-card" hidden>
+        <div class="result-topline">
+          <span id="resultMode" class="tag">Фото‑скан</span>
+          <span id="score" class="score">0/100</span>
+        </div>
+        <h2 id="resultTitle"></h2>
+        <div id="vibeName" class="vibe-name"></div>
+        <div id="bars" class="bars"></div>
+        <p id="roast" class="roast"></p>
+        <p id="advice" class="advice"></p>
+        <p id="disclaimer" class="disclaimer"></p>
+        <div class="actions">
+          <button id="shareButton" class="secondary" type="button" data-i18n="shareButton">Поделиться</button>
+          <button id="deepButton" class="secondary premium-button" type="button" data-i18n="deepButton">Глубокий скан ⭐</button>
+        </div>
+      </section>
+
+      <section class="premium-card glass-card" aria-label="Премиум разбор" data-i18n-aria-label="premiumAria">
+        <div class="premium-star" aria-hidden="true">⭐</div>
+        <div class="premium-copy">
+          <div class="premium-line">
+            <span data-i18n="premiumLabel">Премиум разбор</span>
+            <b data-i18n="premiumPrice">от 25 Stars</b>
+          </div>
+          <h2 data-i18n="premiumTitle">Глубокий AI‑анализ без фильтров</h2>
+          <p data-i18n="premiumCopy">Детальный разбор, скрытые сигналы, рекомендации и инсайты.</p>
+        </div>
+        <button id="premiumInfoButton" class="outline-button" type="button" data-i18n="detailsButton">Подробнее</button>
+      </section>
+
+      <footer class="safety-card glass-card">
+        <span class="shield">🛡️</span>
+        <p data-i18n-html="footerDisclaimer"><strong>Дисклеймер:</strong> SnarkScan AI создан для развлечения. Результаты не являются объективной оценкой личности, здоровья, внешности или отношений.</p>
+      </footer>
+    </main>
+
+    <template id="barTemplate">
+      <div class="bar-row">
+        <div class="bar-head"><span class="bar-label"></span><span class="bar-value"></span></div>
+        <div class="bar-track"><div class="bar-fill"></div></div>
+      </div>
+    </template>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
