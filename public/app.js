@@ -560,8 +560,8 @@ async function refreshServerBalance({ showStatus = false } = {}) {
       headers: apiHeaders()
     });
     const data = await response.json();
-    if (!response.ok || data.source !== 'server') throw new Error('Balance unavailable');
-    state.balanceSource = 'server';
+    if (!response.ok || !['supabase', 'memory', 'server'].includes(data.source)) throw new Error('Balance unavailable');
+    state.balanceSource = data.source === 'memory' ? 'memory' : 'server';
     setDeepScans(Number(data.deepScans) || 0);
     if (showStatus) setPurchaseStatus(t('balanceUpdated'), 'success');
   } catch {

@@ -23,7 +23,7 @@ export function getStarPackage(packageId) {
   return STAR_PACKAGES[packageId] || null;
 }
 
-export async function createStarsInvoice({ botToken, publicAppUrl, userId, sessionId, packageId }) {
+export async function createStarsInvoice({ botToken, publicAppUrl, userId, sessionId, userKey, packageId }) {
   if (!botToken) {
     const error = new Error('Payments are not connected yet.');
     error.code = 'PAYMENTS_NOT_CONNECTED';
@@ -46,6 +46,7 @@ export async function createStarsInvoice({ botToken, publicAppUrl, userId, sessi
       payload: JSON.stringify({
         product: 'deep_scans',
         packageId: pack.id,
+        user_key: userKey,
         scans: pack.scans,
         userId: userId || null,
         sessionId: sessionId || null,

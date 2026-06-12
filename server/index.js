@@ -9,11 +9,19 @@ import { verifyTelegramWebAppData } from './src/telegramAuth.js';
 import { createDeepScanInvoice, createStarsInvoice, getStarPackage } from './src/telegramPayments.js';
 import {
   addBalance,
+  addSupabaseBalance,
   BALANCE_PACKAGES,
+  deleteSupabasePayment,
   getBalance,
   getIdentity,
+  getSupabaseBalance,
+  hasSupabaseConfig,
+  hasSupabasePayment,
+  insertSupabasePayment,
   refundDeepScan,
-  spendDeepScan
+  refundSupabaseDeepScan,
+  spendDeepScan,
+  spendSupabaseDeepScan
 } from './src/balances.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +29,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, '..', 'public');
+const memoryPaymentChargeIds = new Set();
 
 app.use(cors());
 app.use(express.json({ limit: '7mb' }));
@@ -84,10 +93,52 @@ function parseInvoicePayload(rawPayload) {
     if (payload?.product !== 'deep_scans') return null;
     const scans = BALANCE_PACKAGES[payload.packageId];
     if (!scans) return null;
-    return { packageId: payload.packageId, scans };
+    return { packageId: payload.packageId, scans, userKey: payload.user_key || payload.userKey || null, raw: payload };
   } catch {
     return null;
   }
+}
+
+async function getBalanceWithFallback(identity) {
+  if (!hasSupabaseConfig) {
+    return { deepScans: getBalance(identity), source: 'memory' };
+  }
+
+  try {
+    return { deepScans: await getSupabaseBalance(identity), source: 'supabase' };
+  } catch (error) {
+    console.error('Supabase balance unavailable:', error.message);
+    return { deepScans: getBalance(identity), source: 'memory' };
+  }
+}
+
+async function spendDeepScanWithFallback(identity) {
+  if (!hasSupabaseConfig) {
+    const ok = spendDeepScan(identity);
+    return { ok, deepScans: getBalance(identity), source: 'memory' };
+  }
+
+  try {
+    const result = await spendSupabaseDeepScan(identity);
+    return { ...result, source: 'supabase' };
+  } catch (error) {
+    console.error('Supabase spend unavailable:', error.message);
+    const ok = spendDeepScan(identity);
+    return { ok, deepScans: getBalance(identity), source: 'memory' };
+  }
+}
+
+async function refundDeepScanBySource(identity, source) {
+  if (source === 'supabase') {
+    try {
+      return await refundSupabaseDeepScan(identity);
+    } catch (error) {
+      console.error('Supabase refund failed:', error.message);
+      return 0;
+    }
+  }
+
+  return refundDeepScan(identity);
 }
 
 app.use(attachTelegramUser);
@@ -109,23 +160,23 @@ app.post('/api/scan', requireTelegramAuth, async (req, res) => {
   }
 });
 
-app.get('/api/balance', requireTelegramAuth, (req, res) => {
+app.get('/api/balance', requireTelegramAuth, async (req, res) => {
   const identity = getIdentity(req);
-  res.json({
-    deepScans: getBalance(identity),
-    source: 'server'
-  });
+  const balance = await getBalanceWithFallback(identity);
+  res.json(balance);
 });
 
 app.post('/api/deep-scan/use', requireTelegramAuth, async (req, res) => {
   const identity = getIdentity(req);
+  const spend = await spendDeepScanWithFallback(identity);
 
-  if (!spendDeepScan(identity)) {
+  if (!spend.ok) {
     return res.status(402).json({
       ok: false,
       error: 'Not enough deep scans. Please buy a package to continue.',
       code: 'INSUFFICIENT_DEEP_SCANS',
-      deepScans: getBalance(identity)
+      deepScans: spend.deepScans,
+      source: spend.source
     });
   }
 
@@ -135,22 +186,24 @@ app.post('/api/deep-scan/use', requireTelegramAuth, async (req, res) => {
     res.json({
       ok: true,
       result,
-      deepScans: getBalance(identity),
+      deepScans: spend.deepScans,
+      source: spend.source,
       message: 'Deep scan spent.'
     });
   } catch (error) {
-    refundDeepScan(identity);
+    const deepScans = await refundDeepScanBySource(identity, spend.source);
     console.error(error);
     res.status(error.status || 500).json({
       ok: false,
       error: 'Could not complete the deep scan. The scan was returned to your balance.',
       code: 'DEEP_SCAN_FAILED',
-      deepScans: getBalance(identity)
+      deepScans,
+      source: spend.source
     });
   }
 });
 
-app.post('/api/telegram/webhook', (req, res) => {
+app.post('/api/telegram/webhook', async (req, res) => {
   const message = req.body?.message;
   const payment = message?.successful_payment;
   if (!payment) {
@@ -163,11 +216,45 @@ app.post('/api/telegram/webhook', (req, res) => {
     return res.json({ ok: true });
   }
 
-  addBalance({
+  const telegramPaymentChargeId = payment.telegram_payment_charge_id;
+  if (!telegramPaymentChargeId) {
+    return res.json({ ok: true });
+  }
+
+  const identity = {
     type: 'telegram',
     id: String(telegramUserId),
-    key: `telegram:${telegramUserId}`
-  }, payload.scans);
+    key: payload.userKey || `telegram:${telegramUserId}`
+  };
+
+  try {
+    if (hasSupabaseConfig) {
+      const alreadyProcessed = await hasSupabasePayment(telegramPaymentChargeId);
+      if (alreadyProcessed) return res.json({ ok: true });
+
+      await insertSupabasePayment({
+        telegramPaymentChargeId,
+        providerPaymentChargeId: payment.provider_payment_charge_id,
+        identity,
+        packageId: payload.packageId,
+        starsAmount: payment.total_amount,
+        deepScansAdded: payload.scans,
+        payload: payload.raw
+      });
+
+      try {
+        await addSupabaseBalance(identity, payload.scans);
+      } catch (error) {
+        await deleteSupabasePayment(telegramPaymentChargeId);
+        throw error;
+      }
+    } else if (!memoryPaymentChargeIds.has(telegramPaymentChargeId)) {
+      memoryPaymentChargeIds.add(telegramPaymentChargeId);
+      addBalance(identity, payload.scans);
+    }
+  } catch (error) {
+    console.error('Telegram payment processing failed:', error.message);
+  }
 
   res.json({ ok: true });
 });
@@ -210,6 +297,7 @@ app.post('/api/stars/create-invoice', requireTelegramAuth, async (req, res) => {
       publicAppUrl: process.env.PUBLIC_APP_URL,
       userId,
       sessionId,
+      userKey: identity.key,
       packageId: pack.id
     });
 
