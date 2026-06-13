@@ -59,6 +59,30 @@ function attachTelegramUser(req, _res, next) {
   return next();
 }
 
+function getAdminToken(req) {
+  return req.query?.adminToken || req.body?.adminToken || req.headers['x-admin-test-token'] || '';
+}
+
+function requireAdminTestToken(req, res, next) {
+  const expectedToken = process.env.ADMIN_TEST_TOKEN;
+  if (!expectedToken || getAdminToken(req) !== expectedToken) {
+    return res.status(403).json({ ok: false, error: 'Forbidden' });
+  }
+  return next();
+}
+
+function requireTelegramWebhookSecret(req, res, next) {
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!expectedSecret) return next();
+
+  const actualSecret = req.headers['x-telegram-bot-api-secret-token'];
+  if (actualSecret !== expectedSecret) {
+    return res.status(403).json({ ok: false, error: 'Forbidden' });
+  }
+
+  return next();
+}
+
 async function runScan({ mode = 'photo', language = 'ru', text = '', imageDataUrl = '', name = '', deep = false }) {
   const safeMode = ['photo', 'roast', 'chat', 'compare'].includes(mode) ? mode : 'photo';
   const safeLanguage = ['ru', 'en', 'uk'].includes(language) ? language : 'ru';
@@ -145,6 +169,8 @@ async function refundDeepScanBySource(identity, source) {
 }
 
 app.use(attachTelegramUser);
+app.use('/api/dev', requireAdminTestToken);
+app.use('/api/test', requireAdminTestToken);
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, app: 'SnarkScan AI', ai: Boolean(process.env.OPENAI_API_KEY) });
@@ -170,6 +196,27 @@ app.get('/api/balance', requireTelegramAuth, async (req, res) => {
     res.json(balance);
   } catch {
     res.status(503).json({ error: 'Balance unavailable' });
+  }
+});
+
+app.post('/api/dev/grant-test-scans', requireTelegramAuth, async (req, res) => {
+  try {
+    const identity = getIdentity(req);
+    const count = Number(req.body?.count) || 5;
+    const safeCount = Math.max(1, Math.min(100, count));
+    const deepScans = hasSupabaseConfig
+      ? await addSupabaseBalance(identity, safeCount)
+      : addBalance(identity, safeCount);
+
+    res.json({
+      ok: true,
+      deepScans,
+      added: safeCount,
+      source: hasSupabaseConfig ? 'supabase' : 'memory'
+    });
+  } catch (error) {
+    console.error('Test scans grant failed:', error.message);
+    res.status(503).json({ ok: false, error: 'Could not grant test scans.' });
   }
 });
 
@@ -210,7 +257,7 @@ app.post('/api/deep-scan/use', requireTelegramAuth, async (req, res) => {
   }
 });
 
-app.post('/api/telegram/webhook', async (req, res) => {
+app.post('/api/telegram/webhook', requireTelegramWebhookSecret, async (req, res) => {
   const message = req.body?.message;
   const payment = message?.successful_payment;
   if (!payment) {
