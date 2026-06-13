@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createMockScan } from './src/snarkEngine.js';
 import { createOpenAIScan } from './src/openaiClient.js';
 import { verifyTelegramWebAppData } from './src/telegramAuth.js';
-import { createDeepScanInvoice, createStarsInvoice, getStarPackage } from './src/telegramPayments.js';
+import { createDeepScanInvoice, createStarsInvoice, decodeInvoicePayload, getStarPackage } from './src/telegramPayments.js';
 import {
   addBalance,
   addSupabaseBalance,
@@ -115,15 +115,10 @@ async function runScan({ mode = 'photo', language = 'ru', text = '', imageDataUr
 }
 
 function parseInvoicePayload(rawPayload) {
-  try {
-    const payload = JSON.parse(rawPayload || '{}');
-    if (payload?.product !== 'deep_scans') return null;
-    const scans = BALANCE_PACKAGES[payload.packageId];
-    if (!scans) return null;
-    return { packageId: payload.packageId, scans, userKey: payload.user_key || payload.userKey || null, raw: payload };
-  } catch {
-    return null;
-  }
+  const payload = decodeInvoicePayload(rawPayload);
+  const scans = BALANCE_PACKAGES[payload?.packageId];
+  if (!payload || !scans) return null;
+  return { ...payload, scans };
 }
 
 async function getBalanceWithFallback(identity) {
