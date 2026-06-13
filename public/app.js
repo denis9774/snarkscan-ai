@@ -348,6 +348,7 @@ scanButton.addEventListener('click', async () => {
         language: state.language,
         text: scanText.value.trim(),
         imageDataUrl: state.imageDataUrl,
+        imageBase64: state.imageDataUrl,
         name: tg?.initDataUnsafe?.user?.first_name || ''
       })
     });
@@ -603,6 +604,7 @@ async function runServerDeepScan() {
         language: state.language,
         text: scanText.value.trim(),
         imageDataUrl: state.imageDataUrl,
+        imageBase64: state.imageDataUrl,
         name: tg?.initDataUnsafe?.user?.first_name || '',
         userId: tg?.initDataUnsafe?.user?.id || null,
         sessionId
@@ -689,22 +691,29 @@ async function buyStarsPackage(packageId) {
 }
 
 function renderResult(result) {
+  const resultVibes = result.vibes || result.percentages || [];
+  const resultBadge = result.badge || result.label || result.vibeName || '';
+  const resultSummary = result.summary || '';
+  const resultDetails = result.details || result.detailedAnalysis || '';
+  const resultHiddenSignals = result.hiddenSignals || '';
+
   resultCard.hidden = false;
   resultCard.classList.toggle('deep-result', Boolean(result.deep));
-  resultMode.textContent = result.deep ? (result.label || 'DEEP SCAN') : modeLabel(state.mode);
+  resultMode.textContent = result.deep ? (resultBadge || 'DEEP SCAN') : modeLabel(state.mode);
   resultTitle.textContent = result.title;
-  vibeName.textContent = result.vibeName;
+  vibeName.textContent = resultBadge || result.vibeName || result.title;
   score.textContent = `${result.score}/100`;
   roast.textContent = result.roast;
   advice.textContent = result.advice;
   disclaimer.textContent = result.disclaimer;
   if (detailedAnalysis) {
-    detailedAnalysis.hidden = !result.detailedAnalysis;
-    detailedAnalysis.textContent = result.detailedAnalysis || '';
+    const analysisText = [resultSummary, resultDetails, resultHiddenSignals].filter(Boolean).join('\n\n');
+    detailedAnalysis.hidden = !analysisText;
+    detailedAnalysis.textContent = analysisText;
   }
   bars.innerHTML = '';
 
-  (result.percentages || []).slice(0, result.deep ? 7 : 5).forEach((item) => {
+  resultVibes.slice(0, result.deep ? 7 : 5).forEach((item) => {
     const node = barTemplate.content.cloneNode(true);
     node.querySelector('.bar-label').textContent = item.label;
     node.querySelector('.bar-value').textContent = `${item.value}%`;

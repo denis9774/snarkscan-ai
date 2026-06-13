@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMockScan } from './src/snarkEngine.js';
-import { createOpenAIScan } from './src/openaiClient.js';
+import { createOpenAIScan, normalizeImageInput } from './src/openaiClient.js';
 import { verifyTelegramWebAppData } from './src/telegramAuth.js';
 import { createDeepScanInvoice, createStarsInvoice, decodeInvoicePayload, getStarPackage } from './src/telegramPayments.js';
 import {
@@ -33,6 +33,8 @@ const publicDir = path.join(__dirname, '..', 'public');
 const memoryPaymentChargeIds = new Set();
 const hasSupabaseUrl = Boolean(process.env.SUPABASE_URL);
 const hasSupabaseServiceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+const openAIEnabled = Boolean(process.env.OPENAI_API_KEY);
+const openAIModel = process.env.OPENAI_MODEL || 'gpt-5.5';
 
 app.use(cors());
 app.use(express.json({ limit: '7mb' }));
@@ -83,15 +85,12 @@ function requireTelegramWebhookSecret(req, res, next) {
   return next();
 }
 
-async function runScan({ mode = 'photo', language = 'ru', text = '', imageDataUrl = '', name = '', deep = false }) {
-  const safeMode = ['photo', 'roast', 'chat', 'compare'].includes(mode) ? mode : 'photo';
+async function runScan({ mode = 'photo', language = 'ru', text = '', imageDataUrl = '', imageBase64 = '', imageUrl = '', name = '', deep = false }) {
+  const safeMode = ['photo', 'roast', 'chat', 'compare', 'deep'].includes(mode) ? mode : 'photo';
   const safeLanguage = ['ru', 'en', 'uk'].includes(language) ? language : 'ru';
+  const isDeep = Boolean(deep || safeMode === 'deep');
 
-  if (imageDataUrl && !String(imageDataUrl).startsWith('data:image/')) {
-    const error = new Error('imageDataUrl must be a data:image URL');
-    error.status = 400;
-    throw error;
-  }
+  const safeImage = normalizeImageInput({ imageDataUrl, imageBase64, imageUrl });
 
   if (String(text).length > 4000) {
     const error = new Error('Text is too long. Keep it under 4000 characters.');
@@ -99,19 +98,20 @@ async function runScan({ mode = 'photo', language = 'ru', text = '', imageDataUr
     throw error;
   }
 
-  if (process.env.OPENAI_API_KEY) {
+  if (openAIEnabled) {
     return createOpenAIScan({
       apiKey: process.env.OPENAI_API_KEY,
-      model: process.env.OPENAI_MODEL,
+      model: openAIModel,
       mode: safeMode,
       text,
-      imageDataUrl,
+      imageDataUrl: safeImage.startsWith('data:image/') ? safeImage : '',
+      imageUrl: safeImage.startsWith('http') ? safeImage : '',
       language: safeLanguage,
-      deep: Boolean(deep)
+      deep: isDeep
     });
   }
 
-  return createMockScan({ mode: safeMode, language: safeLanguage, text, name, deep: Boolean(deep) });
+  return createMockScan({ mode: safeMode === 'deep' ? 'photo' : safeMode, language: safeLanguage, text, name, deep: isDeep });
 }
 
 function parseInvoicePayload(rawPayload) {
@@ -173,12 +173,12 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/scan', requireTelegramAuth, async (req, res) => {
   try {
-    const { mode = 'photo', language = 'ru', text = '', imageDataUrl = '', name = '', deep = false } = req.body || {};
-    const result = await runScan({ mode, language, text, imageDataUrl, name, deep });
+    const { mode = 'photo', language = 'ru', text = '', imageDataUrl = '', imageBase64 = '', imageUrl = '', name = '', deep = false } = req.body || {};
+    const result = await runScan({ mode, language, text, imageDataUrl, imageBase64, imageUrl, name, deep });
 
     res.json({ ok: true, result });
   } catch (error) {
-    console.error(error);
+    console.error('OpenAI scan failed:', error.message);
     const fallback = createMockScan({ mode: req.body?.mode || 'photo', language: req.body?.language || 'ru', text: req.body?.text || '', deep: Boolean(req.body?.deep) });
     res.status(200).json({ ok: true, result: fallback, warning: error.message || 'AI failed, returned mock result' });
   }
@@ -230,8 +230,8 @@ app.post('/api/deep-scan/use', requireTelegramAuth, async (req, res) => {
   }
 
   try {
-    const { mode = 'photo', language = 'ru', text = '', imageDataUrl = '', name = '' } = req.body || {};
-    const result = await runScan({ mode, language, text, imageDataUrl, name, deep: true });
+    const { mode = 'photo', language = 'ru', text = '', imageDataUrl = '', imageBase64 = '', imageUrl = '', name = '' } = req.body || {};
+    const result = await runScan({ mode, language, text, imageDataUrl, imageBase64, imageUrl, name, deep: true });
     res.json({
       ok: true,
       result,
@@ -241,7 +241,7 @@ app.post('/api/deep-scan/use', requireTelegramAuth, async (req, res) => {
     });
   } catch (error) {
     const deepScans = await refundDeepScanBySource(identity, spend.source);
-    console.error(error);
+    console.error('OpenAI deep scan failed:', error.message);
     res.status(error.status || 500).json({
       ok: false,
       error: 'Could not complete the deep scan. The scan was returned to your balance.',
@@ -380,4 +380,6 @@ app.listen(port, () => {
   console.log(`SUPABASE_URL present: ${hasSupabaseUrl}`);
   console.log(`SUPABASE_SERVICE_ROLE_KEY present: ${hasSupabaseServiceRoleKey}`);
   console.log(`Supabase client enabled: ${Boolean(hasSupabaseConfig && supabase)}`);
+  console.log(`OpenAI enabled: ${openAIEnabled}`);
+  console.log(`OpenAI model present: ${Boolean(openAIModel)}`);
 });
